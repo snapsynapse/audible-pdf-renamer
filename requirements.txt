@@ -1,0 +1,20 @@
+# Core dependencies (required)
+pdfplumber>=0.10.0
+pypdf>=4.0.0
+
+# OCR support (optional but recommended)
+pytesseract>=0.3.10
+pdf2image>=1.16.0
+
+# Note: OCR also requires system packages:
+# - tesseract-ocr (OCR engine)
+# - poppler-utils (PDF rendering)
+#
+# Install on macOS:
+#   brew install tesseract poppler
+#
+# Install on Ubuntu/Debian:
+#   sudo apt-get install tesseract-ocr poppler-utils
+#
+# Install on Windows:
+#   See README.md for download links
