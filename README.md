@@ -67,7 +67,7 @@ sudo apt-get install tesseract-ocr poppler-utils
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/audible-pdf-renamer.git
+git clone https://github.com/snapsynapse/audible-pdf-renamer.git
 cd audible-pdf-renamer
 pip install -r requirements.txt
 ```
