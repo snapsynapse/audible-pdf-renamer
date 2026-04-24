@@ -127,6 +127,16 @@ python audible_pdf_renamer.py --pattern "*.pdf"
 python audible_pdf_renamer.py ~/Downloads/Audible --dry-run --verbose
 ```
 
+## Development
+
+Run the eval suite locally with:
+
+```bash
+pytest -q
+```
+
+GitHub Actions runs the same suite on macOS, Ubuntu, and Windows for pull requests and pushes to `main`.
+
 ## How It Works
 
 The tool uses a 3-tier fallback approach to extract book titles:

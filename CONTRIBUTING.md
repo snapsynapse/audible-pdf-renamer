@@ -71,6 +71,9 @@ Feature suggestions are welcome! Please:
 
 3. Test your changes:
    ```bash
+   # Run the automated eval suite
+   pytest -q
+
    # Run with --dry-run on sample PDFs
    python audible_pdf_renamer.py /path/to/test/pdfs --dry-run --verbose
    ```

@@ -29,29 +29,63 @@ import argparse
 import os
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 __version__ = "1.0.0"
 __author__ = "Audible PDF Renamer Contributors"
 __license__ = "MIT"
 
-# Required packages
-try:
-    import pdfplumber
-    from pypdf import PdfReader
-except ImportError as e:
-    print(f"Error: Required package not found: {e}")
-    print("Install with: pip install pdfplumber pypdf")
-    sys.exit(1)
-
-# OCR packages (optional)
 OCR_AVAILABLE = False
-try:
-    import pytesseract
-    from pdf2image import convert_from_path
+pdfplumber = None
+PdfReader = None
+pytesseract = None
+convert_from_path = None
+
+WINDOWS_RESERVED_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+}
+
+
+def ensure_required_packages():
+    """Import required PDF packages on demand."""
+    global pdfplumber, PdfReader
+
+    if pdfplumber is not None and PdfReader is not None:
+        return
+
+    try:
+        import pdfplumber as pdfplumber_module
+        from pypdf import PdfReader as pdf_reader
+    except ImportError as e:
+        raise RuntimeError(
+            f"Required package not found: {e}. Install with: pip install pdfplumber pypdf"
+        ) from e
+
+    pdfplumber = pdfplumber_module
+    PdfReader = pdf_reader
+
+
+def ensure_ocr_packages():
+    """Import optional OCR packages on demand."""
+    global OCR_AVAILABLE, pytesseract, convert_from_path
+
+    if OCR_AVAILABLE and pytesseract is not None and convert_from_path is not None:
+        return True
+
+    try:
+        import pytesseract as pytesseract_module
+        from pdf2image import convert_from_path as convert_from_path_func
+    except ImportError:
+        OCR_AVAILABLE = False
+        return False
+
+    pytesseract = pytesseract_module
+    convert_from_path = convert_from_path_func
     OCR_AVAILABLE = True
-except ImportError:
-    pass
+    return True
 
 
 class TitleExtractor:
@@ -76,6 +110,7 @@ class TitleExtractor:
     def extract_from_metadata(self, filepath):
         """Strategy 1: Try PDF metadata."""
         try:
+            ensure_required_packages()
             reader = PdfReader(filepath)
             meta = reader.metadata
             if meta and meta.title and len(str(meta.title)) > 3:
@@ -93,6 +128,7 @@ class TitleExtractor:
     def extract_from_text(self, filepath):
         """Strategy 2: Extract from text content."""
         try:
+            ensure_required_packages()
             with pdfplumber.open(filepath) as pdf:
                 for page_num in range(min(5, len(pdf.pages))):
                     page = pdf.pages[page_num]
@@ -170,6 +206,8 @@ class TitleExtractor:
             return None
 
         try:
+            if not ensure_ocr_packages():
+                return None
             self.log("Attempting OCR extraction...")
             images = convert_from_path(filepath, first_page=1, last_page=2, dpi=150)
 
@@ -238,6 +276,30 @@ class TitleExtractor:
         return None, None
 
 
+@dataclass
+class RenamePlan:
+    """Planned rename for a single PDF."""
+
+    source: Path
+    destination: Path | None
+    title: str | None
+    method: str | None
+    status: str
+    detail: str | None = None
+
+
+@dataclass
+class RenameResult:
+    """Outcome of executing a rename plan."""
+
+    source: Path
+    destination: Path | None
+    title: str | None
+    method: str | None
+    status: str
+    detail: str | None = None
+
+
 def safe_filename(title, max_length=100):
     """Create a safe filename from a title."""
     if not title:
@@ -247,9 +309,17 @@ def safe_filename(title, max_length=100):
     safe = re.sub(r'[<>:"/\\|?*]', '', title)
     # Normalize whitespace
     safe = ' '.join(safe.split())
+    # Windows forbids trailing spaces and periods
+    safe = safe.rstrip(' .')
+    # Avoid Windows reserved device names
+    if safe.upper() in WINDOWS_RESERVED_NAMES or safe in {".", ".."}:
+        safe = f"{safe}_"
+    if not safe:
+        safe = "untitled"
     # Truncate if too long
     if len(safe) > max_length:
         safe = safe[:max_length].rsplit(' ', 1)[0]
+        safe = safe.rstrip(' .') or "untitled"
 
     return safe.strip()
 
@@ -268,25 +338,129 @@ def find_pdfs(folder, pattern="bk_*"):
                       if f.suffix.lower() == '.pdf'])
     else:
         # Custom pattern
-        return sorted(folder.glob(pattern))
+        return sorted(
+            f for f in folder.glob(pattern)
+            if f.is_file() and f.suffix.lower() == '.pdf'
+        )
+
+
+def validate_folder(folder_path):
+    """Validate and normalize the target folder."""
+    folder = Path(folder_path)
+
+    if not folder.exists():
+        return None, f"Error: Folder not found: {folder}"
+
+    if not folder.is_dir():
+        return None, f"Error: Not a directory: {folder}"
+
+    return folder, None
+
+
+def resolve_destination(pdf_file, title):
+    """Resolve a conflict-safe destination beside the source PDF."""
+    base = safe_filename(title)
+    new_name = f"{base}.pdf"
+    new_path = pdf_file.with_name(new_name)
+
+    if new_path.exists() and new_path != pdf_file:
+        counter = 2
+        while new_path.exists():
+            new_name = f"{base} ({counter}).pdf"
+            new_path = pdf_file.with_name(new_name)
+            counter += 1
+
+    return new_path
+
+
+def build_rename_plan(pdf_file, extractor):
+    """Build a pure rename plan from extraction output."""
+    title, method = extractor.extract(pdf_file)
+
+    if not title:
+        return RenamePlan(
+            source=pdf_file,
+            destination=None,
+            title=None,
+            method=None,
+            status="extract_failed",
+            detail="Could not determine title",
+        )
+
+    destination = resolve_destination(pdf_file, title)
+    detail = "already_named" if destination == pdf_file else None
+
+    return RenamePlan(
+        source=pdf_file,
+        destination=destination,
+        title=title,
+        method=method,
+        status="planned",
+        detail=detail,
+    )
+
+
+def execute_rename_plan(plan, dry_run=False):
+    """Execute one rename plan and return a structured result."""
+    if plan.status != "planned":
+        return RenameResult(
+            source=plan.source,
+            destination=plan.destination,
+            title=plan.title,
+            method=plan.method,
+            status=plan.status,
+            detail=plan.detail,
+        )
+
+    if dry_run:
+        return RenameResult(
+            source=plan.source,
+            destination=plan.destination,
+            title=plan.title,
+            method=plan.method,
+            status="dry_run",
+            detail=plan.detail,
+        )
+
+    try:
+        if plan.destination != plan.source:
+            plan.source.rename(plan.destination)
+        return RenameResult(
+            source=plan.source,
+            destination=plan.destination,
+            title=plan.title,
+            method=plan.method,
+            status="renamed",
+            detail=plan.detail,
+        )
+    except Exception as e:
+        return RenameResult(
+            source=plan.source,
+            destination=plan.destination,
+            title=plan.title,
+            method=plan.method,
+            status="rename_failed",
+            detail=str(e),
+        )
 
 
 def rename_pdfs(folder_path, dry_run=False, verbose=False, use_ocr=True, pattern="bk_*"):
     """Main function to rename PDFs in a folder."""
-    folder = Path(folder_path)
-
-    if not folder.exists():
-        print(f"Error: Folder not found: {folder}")
-        return False
-
-    if not folder.is_dir():
-        print(f"Error: Not a directory: {folder}")
+    folder, error = validate_folder(folder_path)
+    if error:
+        print(error)
         return False
 
     pdf_files = find_pdfs(folder, pattern)
 
     if not pdf_files:
         print(f"No PDFs found matching pattern '{pattern}'")
+        return False
+
+    try:
+        ensure_required_packages()
+    except RuntimeError as e:
+        print(f"Error: {e}")
         return False
 
     print(f"Found {len(pdf_files)} PDF(s) to process\n")
@@ -296,44 +470,32 @@ def rename_pdfs(folder_path, dry_run=False, verbose=False, use_ocr=True, pattern
 
     successful = []
     failed = []
-    skipped = []
 
     for pdf_file in pdf_files:
         print(f"\n{pdf_file.name}")
+        plan = build_rename_plan(pdf_file, extractor)
+        result = execute_rename_plan(plan, dry_run=dry_run)
 
-        title, method = extractor.extract(pdf_file)
-
-        if not title:
-            print(f"  ✗ Could not determine title")
+        if result.status == "extract_failed":
+            print(f"  ✗ {result.detail}")
             failed.append(pdf_file.name)
             continue
 
-        new_name = safe_filename(title) + ".pdf"
-        new_path = folder / new_name
+        print(f"  → {result.destination.name}")
+        print(f"    (extracted via {result.method})")
 
-        # Handle conflicts
-        if new_path.exists() and new_path != pdf_file:
-            base = safe_filename(title)
-            counter = 2
-            while new_path.exists():
-                new_name = f"{base} ({counter}).pdf"
-                new_path = folder / new_name
-                counter += 1
-
-        print(f"  → {new_name}")
-        print(f"    (extracted via {method})")
-
-        if dry_run:
+        if result.status == "dry_run":
             print("    [DRY RUN - not renamed]")
-            successful.append((pdf_file.name, new_name))
+            successful.append((pdf_file.name, result.destination.name))
+        elif result.status == "renamed":
+            if result.detail == "already_named":
+                print("  ✓ Already named correctly")
+            else:
+                print("  ✓ Renamed successfully")
+            successful.append((pdf_file.name, result.destination.name))
         else:
-            try:
-                pdf_file.rename(new_path)
-                print(f"  ✓ Renamed successfully")
-                successful.append((pdf_file.name, new_name))
-            except Exception as e:
-                print(f"  ✗ Rename failed: {e}")
-                failed.append(pdf_file.name)
+            print(f"  ✗ Rename failed: {result.detail}")
+            failed.append(pdf_file.name)
 
     # Summary
     print("\n" + "=" * 70)
@@ -396,6 +558,9 @@ Examples:
     )
 
     args = parser.parse_args()
+
+    if not args.no_ocr:
+        ensure_ocr_packages()
 
     print(f"Audible PDF Renamer v{__version__}")
     print(f"Folder: {os.path.abspath(args.folder)}")
