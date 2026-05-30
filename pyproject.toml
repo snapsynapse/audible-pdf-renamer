@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=69,<81"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "audible-pdf-renamer"
+version = "1.0.1"
+description = "Rename Audible PDF companion files to extracted book titles."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+  { name = "Audible PDF Renamer Contributors" }
+]
+dependencies = [
+  "pdfplumber>=0.10.0,<1.0.0",
+  "pypdf>=4.0.0,<7.0.0"
+]
+
+[project.optional-dependencies]
+ocr = [
+  "pytesseract>=0.3.10,<1.0.0",
+  "pdf2image>=1.16.0,<2.0.0"
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Intended Audience :: End Users/Desktop",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Utilities"
+]
+
+[project.urls]
+Homepage = "https://github.com/snapsynapse/audible-pdf-renamer"
+Repository = "https://github.com/snapsynapse/audible-pdf-renamer"
+Issues = "https://github.com/snapsynapse/audible-pdf-renamer/issues"
+
+[project.scripts]
+audible-pdf-renamer = "audible_pdf_renamer:main"
+
+[tool.setuptools]
+py-modules = ["audible_pdf_renamer"]

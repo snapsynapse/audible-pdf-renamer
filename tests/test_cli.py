@@ -44,7 +44,7 @@ def test_version_works_without_pdf_dependencies():
     result = run_with_blocked_pdf_imports("--version")
 
     assert result.returncode == 0
-    assert "audible_pdf_renamer.py 1.0.0" in result.stdout
+    assert "audible_pdf_renamer.py 1.0.1" in result.stdout
 
 
 def test_missing_required_deps_fail_when_execution_needs_them(tmp_path):

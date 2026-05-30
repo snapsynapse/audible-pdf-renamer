@@ -136,6 +136,10 @@ def test_safe_filename_handles_cross_platform_edge_cases():
     assert renamer.safe_filename('AUX<>:"/\\\\|?*') == "AUX_"
     assert renamer.safe_filename("Title. ") == "Title"
     assert renamer.safe_filename("..") == "untitled"
+    assert renamer.safe_filename("CON.txt") == "CON.txt_"
+    assert renamer.safe_filename("COM1.anything") == "COM1.anything_"
+    assert renamer.safe_filename("\x1b[31mRed Title") == "[31mRed Title"
+    assert renamer.safe_filename(".hidden") == "hidden"
 
 
 def test_safe_filename_truncates_long_titles_deterministically():
@@ -149,6 +153,8 @@ def test_safe_filename_truncates_long_titles_deterministically():
 
 def test_safe_filename_preserves_unicode_titles():
     assert renamer.safe_filename("Sapiens 中文 edición") == "Sapiens 中文 edición"
+    assert renamer.safe_filename("The Con Artist") == "The Con Artist"
+    assert renamer.safe_filename("Auxiliary Memory") == "Auxiliary Memory"
 
 
 def test_validate_folder_distinguishes_missing_and_non_directory(tmp_path):
@@ -161,3 +167,36 @@ def test_validate_folder_distinguishes_missing_and_non_directory(tmp_path):
     assert "Folder not found" in missing_error
     assert non_dir_folder is None
     assert "Not a directory" in non_dir_error
+
+
+def test_safe_display_escapes_terminal_control_sequences():
+    assert renamer.safe_display("\x1b[31mRed Title") == "\\x1b[31mRed Title"
+    assert renamer.safe_display("Zero\u200bWidth") == "Zero\\u200bWidth"
+
+
+def test_resource_limit_rejects_oversized_pdf(monkeypatch, tmp_path):
+    source = tmp_path / "bk_large.pdf"
+    create_pdf(source)
+    monkeypatch.setattr(renamer, "MAX_PDF_BYTES", 1)
+
+    extractor = renamer.TitleExtractor(use_ocr=False)
+
+    assert extractor.extract(source) == (None, None)
+
+
+def test_rename_output_escapes_control_characters(monkeypatch, tmp_path, capsys):
+    source = tmp_path / "bk_alpha_001.pdf"
+    create_pdf(source)
+
+    monkeypatch.setattr(renamer, "ensure_required_packages", lambda: None)
+    monkeypatch.setattr(
+        renamer.TitleExtractor,
+        "extract",
+        lambda self, filepath: ("\x1b[31mRed Title", "metadata"),
+    )
+
+    assert renamer.rename_pdfs(tmp_path, dry_run=True) is True
+
+    out = capsys.readouterr().out
+    assert "[31mRed Title.pdf" in out
+    assert "\x1b[31mRed Title.pdf" not in out

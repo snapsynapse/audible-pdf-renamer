@@ -1,10 +1,10 @@
 # Core dependencies (required)
-pdfplumber>=0.10.0
-pypdf>=4.0.0
+pdfplumber>=0.10.0,<1.0.0
+pypdf>=4.0.0,<7.0.0
 
 # OCR support (optional but recommended)
-pytesseract>=0.3.10
-pdf2image>=1.16.0
+pytesseract>=0.3.10,<1.0.0
+pdf2image>=1.16.0,<2.0.0
 
 # Note: OCR also requires system packages:
 # - tesseract-ocr (OCR engine)

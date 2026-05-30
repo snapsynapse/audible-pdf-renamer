@@ -137,6 +137,12 @@ pytest -q
 
 GitHub Actions runs the same suite on macOS, Ubuntu, and Windows for pull requests and pushes to `main`.
 
+## Security and Resource Limits
+
+PDFs are parsed as untrusted local inputs. Version 1.0.1 rejects PDFs larger than 250 MiB, skips text extraction for PDFs over 500 pages or oversized first pages, applies OCR timeouts, strips terminal control characters from extracted filenames, and escapes terminal control characters in command output.
+
+Use `--dry-run --verbose` before renaming a new batch. Do not run this tool on PDFs from sources you do not trust unless you are prepared for the underlying PDF/OCR libraries to process that input locally.
+
 ## How It Works
 
 The tool uses a 3-tier fallback approach to extract book titles:
@@ -153,7 +159,7 @@ Some PDFs (particularly from publishers like O'Reilly) have image-based content 
 ## Example Output
 
 ```
-Audible PDF Renamer v1.0.0
+Audible PDF Renamer v1.0.1
 Folder: /Users/you/Downloads/Audible Booknotes
 OCR: Available
 

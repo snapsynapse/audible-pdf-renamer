@@ -88,3 +88,6 @@ test_pdfs/
 # Local development
 .local/
 scratch/
+
+# JavaScript tooling
+node_modules/

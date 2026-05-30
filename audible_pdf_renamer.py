@@ -29,12 +29,18 @@ import argparse
 import os
 import re
 import sys
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "Audible PDF Renamer Contributors"
 __license__ = "MIT"
+
+MAX_PDF_BYTES = 250 * 1024 * 1024
+MAX_PDF_PAGES = 500
+MAX_PAGE_AREA = 14_400 * 14_400
+OCR_TIMEOUT_SECONDS = 60
 
 OCR_AVAILABLE = False
 pdfplumber = None
@@ -92,13 +98,13 @@ class TitleExtractor:
     """Extracts book titles from PDFs using multiple strategies."""
 
     def __init__(self, use_ocr=True, verbose=False):
-        self.use_ocr = use_ocr and OCR_AVAILABLE
+        self.use_ocr = use_ocr
         self.verbose = verbose
 
     def log(self, message):
         """Print verbose output if enabled."""
         if self.verbose:
-            print(f"    {message}")
+            print(f"    {safe_display(message)}")
 
     def clean_spaced_text(self, text):
         """Convert spaced letters like 'T H I N K I N G' to 'THINKING'"""
@@ -112,6 +118,9 @@ class TitleExtractor:
         try:
             ensure_required_packages()
             reader = PdfReader(filepath)
+            if getattr(reader, "is_encrypted", False):
+                self.log("Metadata extraction skipped: encrypted PDF")
+                return None
             meta = reader.metadata
             if meta and meta.title and len(str(meta.title)) > 3:
                 title = str(meta.title)
@@ -130,8 +139,15 @@ class TitleExtractor:
         try:
             ensure_required_packages()
             with pdfplumber.open(filepath) as pdf:
+                if len(pdf.pages) > MAX_PDF_PAGES:
+                    self.log(f"Text extraction skipped: PDF has more than {MAX_PDF_PAGES} pages")
+                    return None
                 for page_num in range(min(5, len(pdf.pages))):
                     page = pdf.pages[page_num]
+                    page_area = getattr(page, "width", 0) * getattr(page, "height", 0)
+                    if page_area > MAX_PAGE_AREA:
+                        self.log(f"Skipping oversized page {page_num + 1}")
+                        continue
                     text = page.extract_text()
 
                     if not text or not text.strip():
@@ -209,10 +225,16 @@ class TitleExtractor:
             if not ensure_ocr_packages():
                 return None
             self.log("Attempting OCR extraction...")
-            images = convert_from_path(filepath, first_page=1, last_page=2, dpi=150)
+            images = convert_from_path(
+                filepath,
+                first_page=1,
+                last_page=2,
+                dpi=150,
+                timeout=OCR_TIMEOUT_SECONDS,
+            )
 
             for i, image in enumerate(images):
-                text = pytesseract.image_to_string(image)
+                text = pytesseract.image_to_string(image, timeout=OCR_TIMEOUT_SECONDS)
 
                 if not text or not text.strip():
                     continue
@@ -258,6 +280,10 @@ class TitleExtractor:
         Extract book title using 3-tier fallback.
         Returns tuple of (title, method) or (None, None).
         """
+        if not is_pdf_within_resource_limits(filepath):
+            self.log(f"Skipping {Path(filepath).name}: exceeds PDF resource limits")
+            return None, None
+
         # Strategy 1: Metadata
         title = self.extract_from_metadata(filepath)
         if title:
@@ -305,14 +331,16 @@ def safe_filename(title, max_length=100):
     if not title:
         return None
 
+    title = strip_unsafe_unicode(title)
     # Remove characters not allowed in filenames
     safe = re.sub(r'[<>:"/\\|?*]', '', title)
     # Normalize whitespace
     safe = ' '.join(safe.split())
-    # Windows forbids trailing spaces and periods
-    safe = safe.rstrip(' .')
+    # Avoid hidden/path-like names and Windows trailing spaces/periods
+    safe = safe.strip(' .')
     # Avoid Windows reserved device names
-    if safe.upper() in WINDOWS_RESERVED_NAMES or safe in {".", ".."}:
+    stem = safe.split(".", 1)[0].upper()
+    if stem in WINDOWS_RESERVED_NAMES or safe in {".", ".."}:
         safe = f"{safe}_"
     if not safe:
         safe = "untitled"
@@ -322,6 +350,38 @@ def safe_filename(title, max_length=100):
         safe = safe.rstrip(' .') or "untitled"
 
     return safe.strip()
+
+
+def strip_unsafe_unicode(text):
+    """Remove characters that should not influence terminal output or filenames."""
+    cleaned = []
+    for char in str(text):
+        category = unicodedata.category(char)
+        if category in {"Cc", "Cf", "Cs"}:
+            continue
+        cleaned.append(char)
+    return ''.join(cleaned)
+
+
+def safe_display(value):
+    """Render untrusted PDF and filesystem text without terminal control effects."""
+    output = []
+    for char in str(value):
+        category = unicodedata.category(char)
+        if category in {"Cc", "Cf", "Cs"}:
+            codepoint = ord(char)
+            output.append(f"\\x{codepoint:02x}" if codepoint <= 0xFF else f"\\u{codepoint:04x}")
+        else:
+            output.append(char)
+    return ''.join(output)
+
+
+def is_pdf_within_resource_limits(filepath):
+    """Reject inputs large enough to make parsing or OCR unexpectedly expensive."""
+    try:
+        return Path(filepath).stat().st_size <= MAX_PDF_BYTES
+    except OSError:
+        return False
 
 
 def find_pdfs(folder, pattern="bk_*"):
@@ -472,7 +532,7 @@ def rename_pdfs(folder_path, dry_run=False, verbose=False, use_ocr=True, pattern
     failed = []
 
     for pdf_file in pdf_files:
-        print(f"\n{pdf_file.name}")
+        print(f"\n{safe_display(pdf_file.name)}")
         plan = build_rename_plan(pdf_file, extractor)
         result = execute_rename_plan(plan, dry_run=dry_run)
 
@@ -481,7 +541,7 @@ def rename_pdfs(folder_path, dry_run=False, verbose=False, use_ocr=True, pattern
             failed.append(pdf_file.name)
             continue
 
-        print(f"  → {result.destination.name}")
+        print(f"  → {safe_display(result.destination.name)}")
         print(f"    (extracted via {result.method})")
 
         if result.status == "dry_run":
@@ -506,7 +566,7 @@ def rename_pdfs(folder_path, dry_run=False, verbose=False, use_ocr=True, pattern
     if failed:
         print(f"\nFailed files:")
         for name in failed:
-            print(f"  - {name}")
+            print(f"  - {safe_display(name)}")
 
     return len(failed) == 0
 
