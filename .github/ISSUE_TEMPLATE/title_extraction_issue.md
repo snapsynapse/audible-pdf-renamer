@@ -31,6 +31,10 @@ python audible_pdf_renamer.py --verbose --dry-run
 [Paste output here]
 ```
 
+Redact private book titles, local paths, or PDF metadata you do not want public.
+If the file exceeded a resource limit, paste the reported limit message instead
+of uploading the PDF.
+
 ## PDF Structure
 Describe what's on the first few pages:
 - Page 1: [e.g., "Title page with book cover image"]

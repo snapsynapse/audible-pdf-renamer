@@ -22,6 +22,11 @@ When reporting a bug, please include:
 
 **Note**: Please don't upload copyrighted PDF files. Instead, describe the PDF's characteristics.
 
+If verbose output includes private book titles, local paths, or PDF metadata,
+redact those details before posting. If the tool skipped the file because it
+exceeded a resource limit, include the reported limit message instead of the
+file itself.
+
 ## Suggesting Features
 
 Feature suggestions are welcome! Please:
@@ -53,6 +58,14 @@ Feature suggestions are welcome! Please:
    ```bash
    pip install pytest black flake8
    ```
+
+## Assistant-Facing Guidance
+
+This repository publishes a GuideCheck assistant guide at
+`assistant-guide.txt` and `.well-known/assistant-guide.txt`. Treat it as a
+bounded review and local-development guide, not as release authorization.
+GuideCheck conformance is form evidence, not a safety guarantee. Human review,
+sandboxing, least privilege, and explicit approval gates still apply.
 
 ## Code Style
 

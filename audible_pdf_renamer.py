@@ -33,7 +33,7 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 __author__ = "Audible PDF Renamer Contributors"
 __license__ = "MIT"
 
@@ -378,10 +378,19 @@ def safe_display(value):
 
 def is_pdf_within_resource_limits(filepath):
     """Reject inputs large enough to make parsing or OCR unexpectedly expensive."""
+    return pdf_resource_error(filepath) is None
+
+
+def pdf_resource_error(filepath):
+    """Return a user-facing resource-limit reason, or None when accepted."""
     try:
-        return Path(filepath).stat().st_size <= MAX_PDF_BYTES
+        size = Path(filepath).stat().st_size
     except OSError:
-        return False
+        return "Could not stat PDF"
+    if size > MAX_PDF_BYTES:
+        limit_mib = MAX_PDF_BYTES // (1024 * 1024)
+        return f"PDF exceeds {limit_mib} MiB resource limit"
+    return None
 
 
 def find_pdfs(folder, pattern="bk_*"):
@@ -435,6 +444,17 @@ def resolve_destination(pdf_file, title):
 
 def build_rename_plan(pdf_file, extractor):
     """Build a pure rename plan from extraction output."""
+    resource_error = pdf_resource_error(pdf_file)
+    if resource_error:
+        return RenamePlan(
+            source=pdf_file,
+            destination=None,
+            title=None,
+            method=None,
+            status="skipped_resource_limit",
+            detail=resource_error,
+        )
+
     title, method = extractor.extract(pdf_file)
 
     if not title:
@@ -536,7 +556,7 @@ def rename_pdfs(folder_path, dry_run=False, verbose=False, use_ocr=True, pattern
         plan = build_rename_plan(pdf_file, extractor)
         result = execute_rename_plan(plan, dry_run=dry_run)
 
-        if result.status == "extract_failed":
+        if result.status in {"extract_failed", "skipped_resource_limit"}:
             print(f"  ✗ {result.detail}")
             failed.append(pdf_file.name)
             continue

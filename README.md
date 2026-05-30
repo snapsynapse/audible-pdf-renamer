@@ -33,7 +33,8 @@ The Intelligent Investor.pdf
   2. Text extraction from content
   3. OCR for image-based PDFs (optional)
 - **Dry run mode**: Preview changes before committing
-- **Safe renaming**: Handles filename conflicts and special characters
+- **Safer renaming**: Handles filename conflicts, strips unsafe filename
+  characters, and escapes terminal control characters in output
 - **Verbose output**: See exactly how titles are being extracted
 
 ## Installation
@@ -137,11 +138,13 @@ pytest -q
 
 GitHub Actions runs the same suite on macOS, Ubuntu, and Windows for pull requests and pushes to `main`.
 
-## Security and Resource Limits
+## Security, Privacy, and Resource Limits
 
-PDFs are parsed as untrusted local inputs. Version 1.0.1 rejects PDFs larger than 250 MiB, skips text extraction for PDFs over 500 pages or oversized first pages, applies OCR timeouts, strips terminal control characters from extracted filenames, and escapes terminal control characters in command output.
+PDFs are parsed as untrusted local inputs. Version 1.0.2 rejects PDFs larger than 250 MiB with an explicit skip reason, skips text extraction for PDFs over 500 pages or oversized first pages, applies OCR timeouts, strips terminal control characters from extracted filenames, and escapes terminal control characters in command output.
 
-Use `--dry-run --verbose` before renaming a new batch. Do not run this tool on PDFs from sources you do not trust unless you are prepared for the underlying PDF/OCR libraries to process that input locally.
+Use `--dry-run --verbose` before renaming a new batch. Do not run this tool on PDFs from sources you do not trust unless you are prepared for the underlying PDF/OCR libraries to process that input locally. Avoid pasting full verbose output into public issues when it includes private book titles, file paths, or PDF metadata.
+
+This repository also publishes a GuideCheck assistant guide at [`assistant-guide.txt`](assistant-guide.txt) and [`.well-known/assistant-guide.txt`](.well-known/assistant-guide.txt). GuideCheck conformance is form evidence, not a safety guarantee; read the guide before authorizing an assistant to use it.
 
 ## How It Works
 
@@ -159,7 +162,7 @@ Some PDFs (particularly from publishers like O'Reilly) have image-based content 
 ## Example Output
 
 ```
-Audible PDF Renamer v1.0.1
+Audible PDF Renamer v1.0.2
 Folder: /Users/you/Downloads/Audible Booknotes
 OCR: Available
 

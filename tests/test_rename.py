@@ -184,6 +184,19 @@ def test_resource_limit_rejects_oversized_pdf(monkeypatch, tmp_path):
     assert extractor.extract(source) == (None, None)
 
 
+def test_build_rename_plan_reports_resource_limit(monkeypatch, tmp_path):
+    source = tmp_path / "bk_large.pdf"
+    create_pdf(source)
+    monkeypatch.setattr(renamer, "MAX_PDF_BYTES", 1)
+    extractor = renamer.TitleExtractor(use_ocr=False)
+
+    plan = renamer.build_rename_plan(source, extractor)
+
+    assert plan.status == "skipped_resource_limit"
+    assert plan.destination is None
+    assert plan.detail == "PDF exceeds 0 MiB resource limit"
+
+
 def test_rename_output_escapes_control_characters(monkeypatch, tmp_path, capsys):
     source = tmp_path / "bk_alpha_001.pdf"
     create_pdf(source)

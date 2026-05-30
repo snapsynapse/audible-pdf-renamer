@@ -1,0 +1,23 @@
+# Audible PDF Renamer
+
+> Local CLI for renaming Audible PDF companion files to extracted book titles.
+
+Audible PDF Renamer is a Python command-line tool that extracts titles from
+Audible audiobook companion PDFs and renames local files. It parses PDFs and
+OCR output as untrusted local input and applies conservative filename,
+terminal-output, and resource-limit safeguards.
+
+## Key files
+
+- [README](https://github.com/snapsynapse/audible-pdf-renamer/blob/main/README.md): user installation, usage, security, and troubleshooting notes.
+- [Assistant Guide](https://raw.githubusercontent.com/snapsynapse/audible-pdf-renamer/main/.well-known/assistant-guide.txt): bounded assistant instructions for local development and release review.
+- [Source](https://github.com/snapsynapse/audible-pdf-renamer/blob/main/audible_pdf_renamer.py): CLI implementation.
+- [Tests](https://github.com/snapsynapse/audible-pdf-renamer/tree/main/tests): regression and hardening evals.
+- [Changelog](https://github.com/snapsynapse/audible-pdf-renamer/blob/main/CHANGELOG.md): release history.
+
+## Safety notes
+
+- Do not upload copyrighted or private PDFs to public issues.
+- Avoid posting sensitive full verbose output when it includes book titles or PDF metadata.
+- Use `--dry-run --verbose` before renaming a new batch.
+- GuideCheck conformance is form evidence, not a safety guarantee.

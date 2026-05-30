@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.2 - 2026-05-30
+- Add GuideCheck assistant-guide.txt surfaces and llms.txt discovery.
+- Clarify user-facing privacy guidance for verbose output and issue reports.
+- Make oversized-PDF skips report a specific resource-limit status.
+- Add regression coverage for resource-limit planning.
+
 ## 1.0.1 - 2026-05-30
 - Harden filename sanitization for control characters, leading-dot names, and Windows reserved device stems.
 - Escape terminal control characters in verbose and rename output.

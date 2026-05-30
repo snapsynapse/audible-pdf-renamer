@@ -42,5 +42,9 @@ If the bug relates to a specific PDF:
 Paste any error messages here
 ```
 
+Before posting, redact private book titles, local filesystem paths, PDF
+metadata, and any verbose output you do not want public. If the file exceeded a
+resource limit, paste the reported limit message instead of uploading the PDF.
+
 ## Additional Context
 Add any other context about the problem here.
