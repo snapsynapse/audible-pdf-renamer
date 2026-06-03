@@ -22,7 +22,7 @@ def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
     return real_import(name, globals, locals, fromlist, level)
 
 builtins.__import__ = fake_import
-sys.argv = { [str(SCRIPT), *args]!r }
+sys.argv = {[str(SCRIPT), *args]!r}
 runpy.run_path({str(SCRIPT)!r}, run_name="__main__")
 """
     return subprocess.run(
