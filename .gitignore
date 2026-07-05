@@ -91,3 +91,7 @@ scratch/
 
 # JavaScript tooling
 node_modules/
+
+# --- portfolio baseline (2026-07-04): transient dirs ---
+handoffs/
+working/
